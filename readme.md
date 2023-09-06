@@ -1,5 +1,12 @@
 # Tianocore Edk2 PyTool Extensions (edk2toolext)
 
+[![pypi]][_pypi]
+[![codecov]][_codecov]
+[![ci]][_ci]
+[![docs]][_docs]
+
+Getting Started? Check out our documentation at [https://www.tianocore.org/edk2-pytool-extensions](https://www.tianocore.org/edk2-pytool-extensions/)!
+
 This is a Tianocore maintained project consisting of command line and other
 python tools and extensions for building and maintaining an Edk2 based UEFI
 firmware code tree. Part of these tools include "invocables" that can be used to
@@ -25,10 +32,27 @@ This is a supplemental package and is not required to be used for edk2 builds.
 
 ## Current Status
 
-| Host Type | Toolchain | Branch | Build Status | Test Status | Code Coverage |
-| :-------- | :-------- | :---- | :----- | :---- | :--- |
-| Windows Server 2019 | Python 3.10.x | master | [![Build Status](https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Master%20CI%20Build%20-%20Win%20VS2017?branchName=master)](https://dev.azure.com/tianocore/edk2-pytool-extensions/_build/latest?definitionId=8&branchName=master) | ![Azure DevOps tests](https://img.shields.io/azure-devops/tests/tianocore/edk2-pytool-extensions/8.svg) | ![Azure DevOps coverage](https://img.shields.io/azure-devops/coverage/tianocore/edk2-pytool-extensions/8.svg) |
-| Linux Ubuntu 1804 | Python 3.10.x | master | [![Build Status](https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Master%20CI%20Build%20-%20Linux?branchName=master)](https://dev.azure.com/tianocore/edk2-pytool-extensions/_build/latest?definitionId=7&branchName=master) | ![Azure DevOps tests](https://img.shields.io/azure-devops/tests/tianocore/edk2-pytool-extensions/7.svg) | ![Azure DevOps coverage](https://img.shields.io/azure-devops/coverage/tianocore/edk2-pytool-extensions/7.svg) |
+[![codecov]][_codecov]
+[![ci]][_ci]
+
+The code coverage and CI badges represent unit test status and the code
+coverage of those unit tests. We require 100% unit test success
+(Hence the pass / fail) and that code coverage percentage does not lower.
+
+| Host Type           | Toolchain   | Project    | Integration Tests |
+| :------------------ | :---------  | :--------- | :---------------- |
+| Windows Server 2019 | Python 3.9  | Edk2       | [![ewt1]][_it]    |
+| Windows Server 2019 | Python 3.10 | Edk2       | [![ewt2]][_it]    |
+| Windows Server 2019 | Python 3.11 | Edk2       | [![ewt3]][_it]    |
+| Linux Ubuntu 20.04  | Python 3.9  | Edk2       | [![eut1]][_i359]  |
+| Linux Ubuntu 20.04  | Python 3.10 | Edk2       | [![eut2]][_it]    |
+| Linux Ubuntu 20.04  | Python 3.11 | Edk2       | [![eut3]][_it]    |
+| Windows Server 2022 | Python 3.9  | Project Mu | [![mwt1]][_it]    |
+| Windows Server 2022 | Python 3.10 | Project Mu | [![mwt2]][_it]    |
+| Windows Server 2022 | Python 3.11 | Project Mu | [![mwt3]][_it]    |
+| Linux Ubuntu 22.04  | Python 3.9  | Project Mu | [![mut1]][_i359]  |
+| Linux Ubuntu 22.04  | Python 3.10 | Project Mu | [![mut2]][_it]    |
+| Linux Ubuntu 22.04  | Python 3.11 | Project Mu | [![mut3]][_it]    |
 
 ### Current Release
 
@@ -49,7 +73,7 @@ Examples:
 
 * CI build support with plugin
 * Binary dependency resolution (nuget, urls, git repos)
-* Loggers (markdown, file, memory, and colored console)
+* Loggers (file, memory, and colored console)
 * Plugins (pre/post build, function injection)
 * Wrapper around edk2 build
 * VarDict and ShellEnvrionment to manage key/value pairs consistently across
@@ -61,7 +85,7 @@ Examples:
 ## License
 
 All content in this repository is licensed under [BSD-2-Clause Plus Patent
-License](license.txt).
+License](https://github.com/tianocore/edk2-pytool-extensions/blob/master/LICENSE).
 
 [![PyPI -
 License](https://img.shields.io/pypi/l/edk2_pytool_extensions.svg)](https://pypi.org/project/edk2-pytool-extensions/)
@@ -120,4 +144,47 @@ details.
 
 ## Documentation
 
-See the github repo __docs__ folder
+[![docs]][_docs]
+
+Documentation for the most recent release of edk2-pytool-extensions is hosted on
+[tianocore.org/edk2-pytool-extensions](https://www.tianocore.org/edk2-pytool-extensions/).
+Raw documentation is located in the ```docs/``` folder and is split into two
+separate categories. The first is located at ```docs/user/``` and is
+documentation and API references for those that are using this package in their
+own project. Users can generate a local copy of the documentation by executing the
+following command from the root of the project:
+
+```cmd
+pip install --upgrade -e .[docs]
+mkdocs serve
+```
+
+The second is located at ```docs/contributor/``` and is documentation for
+contributing to the edk2-pytool-extensions repository.
+
+[codecov]: https://codecov.io/gh/tianocore/edk2-pytool-extensions/branch/master/graph/badge.svg?token=vVJxZexcTI
+[_codecov]: https://codecov.io/gh/tianocore/edk2-pytool-extensions
+[pypi]: https://img.shields.io/pypi/v/edk2_pytool_extensions.svg
+[_pypi]: https://pypi.org/project/edk2-pytool-extensions/
+[docs]: https://img.shields.io/website?label=docs&url=https%3A%2F%2Fwww.tianocore.org%2Fedk2-pytool-extensions%2F
+[_docs]: https://www.tianocore.org/edk2-pytool-extensions/
+[ci]: https://github.com/tianocore/edk2-pytool-extensions/actions/workflows/run-ci.yml/badge.svg?branch=master&event=push
+[_ci]: https://github.com/tianocore/edk2-pytool-extensions/actions/workflows/run-ci.yml
+
+[_it]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_build?definitionId=52&_a=summary&repositoryFilter=2&branchFilter=14
+[_i359]: https://github.com/tianocore/edk2-pytool-extensions/issues/359
+[ewt1]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=Edk2_Windows_Python39
+[ewt2]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=Edk2_Windows_Python310
+[ewt3]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=Edk2_Windows_Python311
+
+[eut1]: https://img.shields.io/github/issues/detail/label/tianocore/edk2-pytool-extensions/359?color=orange&label=issue%20359
+[eut2]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=Edk2_Ubuntu_Python310
+[eut3]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=Edk2_Ubuntu_Python311
+
+[mwt1]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=ProjectMu_Windows_Python39
+[mwt2]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=ProjectMu_Windows_Python310
+[mwt3]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=ProjectMu_Windows_Python311
+
+[mut1]: https://img.shields.io/github/issues/detail/label/tianocore/edk2-pytool-extensions/359?color=orange&label=issue%20359
+[mut2]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=ProjectMu_Ubuntu_Python310
+[mut3]: https://dev.azure.com/tianocore/edk2-pytool-extensions/_apis/build/status/Integration%20Tests?branchName=master&configuration=ProjectMu_Ubuntu_Python311

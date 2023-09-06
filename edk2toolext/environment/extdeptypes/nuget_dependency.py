@@ -7,16 +7,17 @@
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 ##
 """An ExternalDependency subclass able to download from NuGet."""
-import os
 import logging
-import semantic_version
+import os
 import shutil
 from io import StringIO
-from edk2toolext.environment.external_dependency import ExternalDependency
-from edk2toollib.utility_functions import RunCmd, RemoveTree
-from edk2toollib.utility_functions import GetHostInfo
-import pkg_resources
 from typing import List
+
+import semantic_version
+from edk2toollib.utility_functions import GetHostInfo, RemoveTree, RunCmd
+
+from edk2toolext.bin.nuget import DownloadNuget
+from edk2toolext.environment.external_dependency import ExternalDependency
 
 
 class NugetDependency(ExternalDependency):
@@ -26,7 +27,8 @@ class NugetDependency(ExternalDependency):
         source (str): Source of the nuget dependency.
         version (str): Version of the web dependency.
 
-    TIP: The attributes are what must be described in the ext_dep yaml file!
+    !!! tip
+        The attributes are what must be described in the ext_dep yaml file!
     """
     TypeString = "nuget"
 
@@ -45,29 +47,29 @@ class NugetDependency(ExternalDependency):
         Used to add nuget support on posix platforms.
         https://docs.microsoft.com/en-us/nuget/install-nuget-client-tools
 
-        Note: Strings returned might not be pathlike given they may be quoted
-        for use on the command line.
+        !!! note
+            Strings returned might not be pathlike given they may be quoted
+            for use on the command line.
 
         Returns:
             (list): ["nuget.exe"] or ["mono", "/PATH/TO/nuget.exe"]
             (None): none was found
         """
-        file_name = "NuGet.exe"
         cmd = []
-        if GetHostInfo().os == "Linux":
+        if GetHostInfo().os != "Windows":
             cmd += ["mono"]
 
         nuget_path = os.getenv(cls.NUGET_ENV_VAR_NAME)
-        if nuget_path is None:
-            # No env variable found.  Get it from our package
-            requirement = pkg_resources.Requirement.parse("edk2-pytool-extensions")
-            nuget_file_path = os.path.join("edk2toolext", "bin")
-            nuget_path = pkg_resources.resource_filename(requirement, nuget_file_path)
-
-        nuget_path = os.path.join(nuget_path, file_name)
+        if nuget_path is not None:
+            nuget_path = os.path.join(nuget_path, "NuGet.exe")
+            if not os.path.isfile(nuget_path):
+                logging.info(f'{cls.NUGET_ENV_VAR_NAME} set, but did not exist. Attempting to download.')
+                DownloadNuget(nuget_path)
+        else:
+            nuget_path = DownloadNuget()
 
         if not os.path.isfile(nuget_path):
-            logging.error("We weren't able to find Nuget! Please reinstall your pip environment")
+            logging.error("We weren't able to find or download NuGet!")
             return None
 
         # Make sure quoted string if it has spaces
@@ -194,6 +196,7 @@ class NugetDependency(ExternalDependency):
         if os.path.isdir(cache_search_path):
             # If we found a cache for this version, let's use it.
             if os.path.isdir(inner_cache_search_path):
+                logging.info(self.nuget_cache_path)
                 logging.info(
                     "Local Cache found for Nuget package '%s'. Skipping fetch.", package_name)
                 shutil.copytree(inner_cache_search_path, self.contents_dir)
@@ -229,12 +232,15 @@ class NugetDependency(ExternalDependency):
         output_stream.seek(0)  # return the start of the stream
         # check if we found credential providers
         found_cred_provider = False
+        is_unauthorized = False
         for out_line in output_stream:
             line = out_line.strip()
-            if line.startswith("CredentialProvider") or line.startswith("[CredentialProvider"):
+            if line.startswith(("CredentialProvider", "[CredentialProvider")):
                 found_cred_provider = True
             if line.endswith("as a credential provider plugin."):
                 found_cred_provider = True
+            if "401 (Unauthorized)" in line:
+                is_unauthorized = True
         # if we fail, then we should retry if we have credential providers
         # we currently steal command input so if we don't have cred providers, we hang
         # this gives cred providers a chance to prompt for input since they don't use stdin
@@ -243,6 +249,13 @@ class NugetDependency(ExternalDependency):
             if non_interactive and found_cred_provider:  # we should be interactive next time
                 self._attempt_nuget_install(install_dir, False)
             else:
+                # Only provide this error message if they are not using a credential provider, but receive a 401 error
+                if is_unauthorized and not found_cred_provider:
+                    logging.warning("[Nuget] A package requires credentials, but you do not have a credential "\
+                                    "provider installed.")
+                    logging.warning("[Nuget] Please install a credential provider and try again or run the following "\
+                                    "command in your terminal to install the package manually:")
+                    logging.warning(f"[{' '.join(cmd).replace(' -NonInteractive', '')}]")
                 raise RuntimeError(f"[Nuget] We failed to install this version {self.version} of {package_name}")
 
     def fetch(self):

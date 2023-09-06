@@ -10,10 +10,11 @@
 
 Customized for edk2-pytool-extensions based build and support dynamic Visual studio support 2017++
 """
-import os
 import logging
+import os
 import shutil
 import time
+
 from edk2toolext.environment import version_aggregator
 
 
@@ -54,7 +55,7 @@ class ConfMgmt():
         templatefiles = [os.path.join("Conf", os.path.splitext(f)[0] + ".template") for f in files]
 
         # loop thru each Conf file needed
-        for x in range(0, len(outfiles)):
+        for x in range(len(outfiles)):
             template_file_path = None
 
             # find template file given multiple root locations
@@ -83,7 +84,8 @@ class ConfMgmt():
 
         version should be in #!VERSION={value} format
 
-        NOTE: "0.0" is returned if no version is found
+        !!! note
+            "0.0" is returned if no version is found
         """
         version = "0.0"
         with open(conf_file, "r") as f:

@@ -4,6 +4,7 @@
 # more extensive and custom behavior.
 ##
 # Copyright (c) Microsoft Corporation
+# Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 ##
@@ -13,20 +14,23 @@ This class is designed to be subclassed by a platform to allow more extensive
 and custom behavior.
 """
 
-import os
+import datetime
 import logging
-from edk2toolext.environment.multiple_workspace import MultipleWorkspace
-from edk2toolext.environment import conf_mgmt
-import traceback
+import os
 import time
-from edk2toolext.environment import shell_environment
-from edk2toollib.uefi.edk2.parsers.targettxt_parser import TargetTxtParser
+import traceback
+from collections import namedtuple
+
 from edk2toollib.uefi.edk2.parsers.dsc_parser import DscParser
 from edk2toollib.uefi.edk2.parsers.fdf_parser import FdfParser
-from edk2toollib.utility_functions import RunCmd, RemoveTree
+from edk2toollib.uefi.edk2.parsers.targettxt_parser import TargetTxtParser
+from edk2toollib.uefi.edk2.path_utilities import Edk2Path
+from edk2toollib.utility_functions import RemoveTree, RunCmd
+
 from edk2toolext import edk2_logging
+from edk2toolext.environment import conf_mgmt, shell_environment
+from edk2toolext.environment.multiple_workspace import MultipleWorkspace
 from edk2toolext.environment.plugintypes.uefi_build_plugin import IUefiBuildPlugin
-import datetime
 
 
 class UefiBuilder(object):
@@ -49,7 +53,8 @@ class UefiBuilder(object):
         Clean (bool): Clean the build directory or not
         Update Conf (bool): Update the conf or not
         env (VarDict): Special dictionary containing build and env vars
-        mws (MultipleWorkspace): multiple workspace manager
+        mws (MultipleWorkspace): DEPRECATED. Use self.edk2path
+        edk2path (Edk2Path): path utilities for manipulating edk2 paths, packages, and modules
         ws (str): Workspace root dir
         pp (str): packagespath separated by os.pathsep
         Helper (HelperFunctions): object containing registered helper functions
@@ -72,7 +77,7 @@ class UefiBuilder(object):
         """Adds command line options to the argparser.
 
         Args:
-            parserObj(argparser): argparser object
+            parserObj (argparser): argparser object
         """
         parserObj.add_argument("--SKIPBUILD", "--skipbuild", "--SkipBuild", dest="SKIPBUILD",
                                action='store_true', default=False, help="Skip the build process")
@@ -129,6 +134,7 @@ class UefiBuilder(object):
         self.env = shell_environment.GetBuildVars()
         self.mws = MultipleWorkspace()
         self.mws.setWs(WorkSpace, PackagesPath)
+        self.edk2path = Edk2Path(WorkSpace, PackagesPath.split(os.pathsep))
         self.ws = WorkSpace
         self.pp = PackagesPath  # string using os.pathsep
         self.Helper = PInHelper
@@ -321,7 +327,7 @@ class UefiBuilder(object):
             edk2_build_params = params
         logging.debug(f"Edk2 build parameters are {edk2_build_params}")
 
-        ret = RunCmd(edk2_build_cmd, edk2_build_params)
+        ret = RunCmd(edk2_build_cmd, edk2_build_params, close_fds=False)
         # WORKAROUND - Undo the workaround.
         env.restore_checkpoint(pre_build_env_chk)
 
@@ -338,7 +344,7 @@ class UefiBuilder(object):
     def PreBuild(self):
         """Performs internal PreBuild steps.
 
-        This including calling the platform overridable `PlatformPreBuild()`
+        This includes calling the platform overridable `PlatformPreBuild()`
         """
         edk2_logging.log_progress("Running Pre Build")
         #
@@ -430,7 +436,7 @@ class UefiBuilder(object):
         TemplateDirList = [self.env.GetValue("EDK_TOOLS_PATH")]  # set to edk2 BaseTools
         PlatTemplatesForConf = self.env.GetValue("CONF_TEMPLATE_DIR")  # get platform defined additional path
         if (PlatTemplatesForConf is not None):
-            PlatTemplatesForConf = self.mws.join(self.ws, PlatTemplatesForConf)
+            PlatTemplatesForConf = self.edk2path.GetAbsolutePathOnThisSystemFromEdk2RelativePath(PlatTemplatesForConf)
             TemplateDirList.insert(0, PlatTemplatesForConf)
             logging.debug(f"Platform defined override for Template Conf Files: {PlatTemplatesForConf}")
 
@@ -471,7 +477,13 @@ class UefiBuilder(object):
                           os.path.normpath(os.path.join(self.ws, self.env.GetValue("OUTPUT_DIRECTORY"))),
                           "Computed in SetEnv")
 
-        target = self.env.GetValue("TARGET")
+        target = self.env.GetValue("TARGET", None)
+        if target is None:
+            logging.error("Environment variable TARGET must be set to a build target.")
+            logging.error("Review the 'CLI Env Guide' section provided when using stuart_build "\
+                          "with the -help flag.")
+            return -1
+
         self.env.SetValue("BUILD_OUTPUT_BASE", os.path.join(self.env.GetValue(
             "BUILD_OUT_TEMP"), target + "_" + self.env.GetValue("TOOL_CHAIN_TAG")), "Computed in SetEnv")
 
@@ -488,6 +500,10 @@ class UefiBuilder(object):
         # set environment variables for the build process
         os.environ["EFI_SOURCE"] = self.ws
 
+        # set critical platform Env Defaults if not set anywhere else in the build.
+        for env_var in self.SetPlatformDefaultEnv():
+            self.env.SetValue(env_var.name, env_var.default, "Default Critical Platform Env Value.")
+
         return 0
 
     def FlashRomImage(self):
@@ -500,12 +516,20 @@ class UefiBuilder(object):
 
     @classmethod
     def PlatformPreBuild(self):
-        """Perform Platform PreBuild Steps."""
+        """Perform Platform PreBuild Steps.
+
+        Returns:
+            (int): 0 on success, 1 on failure
+        """
         return 0
 
     @classmethod
     def PlatformPostBuild(self):
-        """Perform Platform PostBuild Steps."""
+        """Perform Platform PostBuild Steps.
+
+        Returns:
+            (int): 0 on success, 1 on failure
+        """
         return 0
 
     @classmethod
@@ -514,34 +538,69 @@ class UefiBuilder(object):
 
         This is performed before platform files like the DSC and FDF have been parsed.
 
-        TIP: If a platform file (DSC, FDF, etc) relies on a variable set in
-        the `UefiBuilder`, it must be set here, before the platform files
-        have been parsed and values have been set.
+        !!! tip
+            If a platform file (DSC, FDF, etc) relies on a variable set in
+            the `UefiBuilder`, it must be set here, before the platform files
+            have been parsed and values have been set.
+
+        Returns:
+            (int): 0 on success, 1 on failure
         """
         return 0
 
     @classmethod
     def SetPlatformEnvAfterTarget(self):
-        """Set and read Platform Env variables after platform files have been parsed."""
+        """Set and read Platform Env variables after platform files have been parsed.
+
+        Returns:
+            (int): 0 on success, 1 on failure
+        """
         return 0
+
+    @classmethod
+    def SetPlatformDefaultEnv(self) -> list[namedtuple]:
+        """Sets platform default environment variables by returning them as a list.
+
+        Variables returned from this method are printed to the command line when
+        calling stuart_build with -h, --help. Variables added here should be
+        reserved only those that are commonly overwritten in the command line for
+        developers.
+
+        Variables returned from this function are the last variables to be set,
+        ensuring that default values are only added if none have been provided by
+        other means.
+
+        Returns:
+            (list[namedtuple]): List of named tuples containing name, description, default
+        """
+        return []
 
     @classmethod
     def PlatformBuildRom(self):
         """Build the platform Rom.
 
-        TIP: Typically called by the platform in PlatformFlashImage. Not called
-        automatically by the `UefiBuilder`.
+        !!! tip
+            Typically called by the platform in PlatformFlashImage. Not called
+            automatically by the `UefiBuilder`.
         """
         return 0
 
     @classmethod
     def PlatformFlashImage(self):
-        """Flashes the image to the system."""
+        """Flashes the image to the system.
+
+        Returns:
+            (int): 0 on success, 1 on failure
+        """
         return 0
 
     @classmethod
     def PlatformGatedBuildShouldHappen(self):
-        """Specifies if a gated build should happen."""
+        """Specifies if a gated build should happen.
+
+        Returns:
+            (bool): True if gated build should happen, else False
+        """
         return True
 
     # ------------------------------------------------------------------------
@@ -553,11 +612,13 @@ class UefiBuilder(object):
 
         "Sets them so they can be overriden.
         """
-        if (os.path.isfile(self.mws.join(self.ws, "Conf", "target.txt"))):
+        conf_file_path = self.edk2path.GetAbsolutePathOnThisSystemFromEdk2RelativePath(
+            "Conf", "target.txt")
+        if os.path.isfile(conf_file_path):
             # parse TargetTxt File
             logging.debug("Parse Target.txt file")
             ttp = TargetTxtParser()
-            ttp.ParseFile(self.mws.join(self.ws, "Conf", "target.txt"))
+            ttp.ParseFile(conf_file_path)
             for key, value in ttp.Dict.items():
                 # set env as overrideable
                 self.env.SetValue(key, value, "From Target.txt", True)
@@ -580,16 +641,24 @@ class UefiBuilder(object):
 
         "Sets them so they can be overriden.
         """
-        if (os.path.isfile(self.mws.join(self.ws, "Conf", "tools_def.txt"))):
+        toolsdef_file_path = self.edk2path.GetAbsolutePathOnThisSystemFromEdk2RelativePath(
+            "Conf", "tools_def.txt")
+        if os.path.isfile(toolsdef_file_path):
             # parse ToolsdefTxt File
             logging.debug("Parse tools_def.txt file")
             tdp = TargetTxtParser()
-            tdp.ParseFile(self.mws.join(self.ws, "Conf", "tools_def.txt"))
+            tdp.ParseFile(toolsdef_file_path)
 
             # Get the tool chain tag and then find the family
             # need to parse tools_def and find *_<TAG>_*_*_FAMILY
             # Example:  *_VS2019_*_*_FAMILY        = MSFT
-            tag = "*_" + self.env.GetValue("TOOL_CHAIN_TAG") + "_*_*_FAMILY"
+            tool_chain = self.env.GetValue("TOOL_CHAIN_TAG", None)
+            if tool_chain is None:
+                logging.error("Environment variable TOOL_CHAIN_TAG must be set to a tool chain.")
+                logging.error("Review the 'CLI Env Guide' section provided when using stuart_build "\
+                              "with the -help flag.")
+                return -1
+            tag = "*_" + tool_chain + "_*_*_FAMILY"
             tool_chain_family = tdp.Dict.get(tag, "UNKNOWN")
             self.env.SetValue("FAMILY", tool_chain_family, "DSC Spec macro - from tools_def.txt")
 
@@ -608,20 +677,17 @@ class UefiBuilder(object):
         if self.env.GetValue("ACTIVE_PLATFORM") is None:
             logging.error("The DSC file was not set. Please set ACTIVE_PLATFORM")
             return -1
-        dsc_file_path = self.mws.join(
-            self.ws, self.env.GetValue("ACTIVE_PLATFORM"))
-        if (os.path.isfile(dsc_file_path)):
+        dsc_file_path = self.edk2path.GetAbsolutePathOnThisSystemFromEdk2RelativePath(
+            self.env.GetValue("ACTIVE_PLATFORM"))
+        if os.path.isfile(dsc_file_path):
             # parse DSC File
-            logging.debug(
-                "Parse Active Platform DSC file: {0}".format(dsc_file_path))
+            logging.debug("Parse Active Platform DSC file: {0}".format(dsc_file_path))
 
             # Get the vars from the environment that are not build keys
             input_vars = self.env.GetAllNonBuildKeyValues()
             # Update with special environment set build keys
             input_vars.update(self.env.GetAllBuildKeyValues())
-
-            dscp = DscParser().SetBaseAbsPath(self.ws).SetPackagePaths(
-                self.pp.split(os.pathsep)).SetInputVars(input_vars)
+            dscp = DscParser().SetEdk2Path(self.edk2path).SetInputVars(input_vars)
             dscp.ParseFile(dsc_file_path)
             for key, value in dscp.LocalVars.items():
                 # set env as overrideable
@@ -642,7 +708,9 @@ class UefiBuilder(object):
         if (self.env.GetValue("FLASH_DEFINITION") is None):
             logging.debug("No flash definition set")
             return 0
-        if (os.path.isfile(self.mws.join(self.ws, self.env.GetValue("FLASH_DEFINITION")))):
+        fdf_file_path = self.edk2path.GetAbsolutePathOnThisSystemFromEdk2RelativePath(
+            self.env.GetValue("FLASH_DEFINITION"))
+        if os.path.isfile(fdf_file_path):
             # parse the FDF file- fdf files have similar syntax to DSC and therefore parser works for both.
             logging.debug("Parse Active Flash Definition (FDF) file")
 
@@ -650,11 +718,8 @@ class UefiBuilder(object):
             input_vars = self.env.GetAllNonBuildKeyValues()
             # Update with special environment set build keys
             input_vars.update(self.env.GetAllBuildKeyValues())
-
-            fdf_parser = FdfParser().SetBaseAbsPath(self.ws).SetPackagePaths(
-                self.pp.split(os.pathsep)).SetInputVars(input_vars)
-            pa = self.mws.join(self.ws, self.env.GetValue("FLASH_DEFINITION"))
-            fdf_parser.ParseFile(pa)
+            fdf_parser = FdfParser().SetEdk2Path(self.edk2path).SetInputVars(input_vars)
+            fdf_parser.ParseFile(fdf_file_path)
             for key, value in fdf_parser.LocalVars.items():
                 self.env.SetValue(key, value, "From Platform FDF File", True)
 

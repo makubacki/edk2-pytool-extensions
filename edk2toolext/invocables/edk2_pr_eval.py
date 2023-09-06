@@ -14,18 +14,23 @@ Contains a PrEvalSettingsManager that must be subclassed in a build settings
 file. This provides platform specific information to Edk2PrEval invocable
 while allowing the invocable itself to remain platform agnostic.
 """
-import os
 import logging
+import os
 from io import StringIO
 from pathlib import Path
-from edk2toolext import edk2_logging
-from edk2toolext.invocables.edk2_multipkg_aware_invocable import Edk2MultiPkgAwareInvocable
-from edk2toolext.invocables.edk2_multipkg_aware_invocable import MultiPkgAwareSettingsInterface
+
+import yaml
 from edk2toollib.uefi.edk2 import path_utilities
 from edk2toollib.uefi.edk2.parsers.dec_parser import DecParser
 from edk2toollib.uefi.edk2.parsers.dsc_parser import DscParser
 from edk2toollib.uefi.edk2.parsers.inf_parser import InfParser
 from edk2toollib.utility_functions import RunCmd
+
+from edk2toolext import edk2_logging
+from edk2toolext.invocables.edk2_multipkg_aware_invocable import (
+    Edk2MultiPkgAwareInvocable,
+    MultiPkgAwareSettingsInterface,
+)
 
 
 class PrEvalSettingsManager(MultiPkgAwareSettingsInterface):
@@ -34,7 +39,7 @@ class PrEvalSettingsManager(MultiPkgAwareSettingsInterface):
     provide information necessary for `stuart_pr_eval.exe` or
     `edk2_pr_eval.py` to successfully execute.
 
-    Example: Example: Overriding PrEvalSettingsManager
+    !!! example "Example of Overriding PrEvalSettingsManager"
         ```python
         from edk2toolext.invocables.edk2_pr_eval import PrEvalSettingsManager
         class PrEvalManager(PrEvalSettingsManager):
@@ -55,7 +60,8 @@ class PrEvalSettingsManager(MultiPkgAwareSettingsInterface):
     def FilterPackagesToTest(self, changedFilesList: list, potentialPackagesList: list) -> list:
         """Filter potential packages to test based on changed files.
 
-        TIP: Optional Override in a subclass
+        !!! tip
+            Optional Override in a subclass
 
         Arguments:
             changedFilesList (list): files changed in this PR
@@ -64,7 +70,8 @@ class PrEvalSettingsManager(MultiPkgAwareSettingsInterface):
 
         Returns:
             (list): filtered packages to test
-        Note:
+
+        !!! Note
             Default implementation does zero filtering
         """
         # default implementation does zero filtering.
@@ -76,7 +83,8 @@ class PrEvalSettingsManager(MultiPkgAwareSettingsInterface):
         If a platform desires to provide its DSC then Policy 4 will evaluate if
         any of the changes will be built in the dsc.
 
-        TIP: Optional Override in a subclass
+        !!! tip
+            Optional Override in a subclass
 
         Returns:
             (tuple): (workspace relative path to dsc file, input dictionary of dsc key value pairs)
@@ -121,7 +129,8 @@ class Edk2PrEval(Edk2MultiPkgAwareInvocable):
     def GetSettingsClass(self):
         """Returns the PrEvalSettingsManager class.
 
-        WARNING: PrEvalSettingsManager must be subclassed in your platform settings file.
+        !!! warning
+            PrEvalSettingsManager must be subclassed in your platform settings file.
         """
         return PrEvalSettingsManager
 
@@ -170,7 +179,7 @@ class Edk2PrEval(Edk2MultiPkgAwareInvocable):
     def get_packages_to_build(self, possible_packages: list) -> dict:
         """Returns a dictionary of packages to build.
 
-        Arguments:
+        Args:
             possible_packages: list of possible packages
 
         Returns:
@@ -283,9 +292,7 @@ class Edk2PrEval(Edk2MultiPkgAwareInvocable):
             changed_modules = [Path(m) for m in changed_modules]
 
             # now check DSC
-            dsc = DscParser()
-            dsc.SetBaseAbsPath(self.edk2_path_obj.WorkspacePath)
-            dsc.SetPackagePaths(self.edk2_path_obj.PackagePathList)
+            dsc = DscParser().SetEdk2Path(self.edk2_path_obj)
             # given that PR eval runs before dependencies are downloaded we must tolerate errors
             dsc.SetNoFailMode()
             dsc.SetInputVars(PlatformDscInfo[1])
@@ -303,6 +310,27 @@ class Edk2PrEval(Edk2MultiPkgAwareInvocable):
                         packages_to_build[p] = f"Policy 4 - Package Dsc depends on {str(cm)}"
                         remaining_packages.remove(p)  # remove from remaining packages
                         break
+
+        #
+        # Policy 5: If a file changed is a Library INF file, then build all packages that depend on that Library
+        # Only supported on packages with a ci.dsc file which contains PrEval.DscPath section.
+        #
+        for f in filter(lambda f: Path(f).suffix == ".inf", files):
+            for p in remaining_packages[:]:
+                dsc, defines = self._get_package_ci_information(p)
+                if not dsc:
+                    logging.debug(f"Policy 5 - Package {p} skipped due to missing ci.dsc file or missing DscPath"
+                                  "section of the PrEval settings.")
+                    continue
+
+                dsc_parser = DscParser()
+                dsc_parser.SetNoFailMode()
+                dsc_parser.SetEdk2Path(self.edk2_path_obj).SetInputVars(defines)
+                dsc_parser.ParseFile(dsc)
+
+                if f in dsc_parser.Libs:
+                    packages_to_build[p] = f"Policy 5 - Package depends on Library {f}"
+                    remaining_packages.remove(p)
 
         # All done now return result
 
@@ -341,8 +369,7 @@ class Edk2PrEval(Edk2MultiPkgAwareInvocable):
         # For each INF file
         for f in inf_files:
             ip = InfParser()
-            ip.SetBaseAbsPath(self.edk2_path_obj.WorkspacePath).SetPackagePaths(
-                self.edk2_path_obj.PackagePathList).ParseFile(f)
+            ip.SetEdk2Path(self.edk2_path_obj).ParseFile(f)
 
             for p in ip.PackagesUsed:
                 if p.startswith(support_package):
@@ -402,7 +429,7 @@ class Edk2PrEval(Edk2MultiPkgAwareInvocable):
 
         # parse it
         dec = DecParser()
-        dec.SetBaseAbsPath(self.edk2_path_obj.WorkspacePath).SetPackagePaths(self.edk2_path_obj.PackagePathList)
+        dec.SetEdk2Path(self.edk2_path_obj)
         dec.ParseFile(wsr_dec_path)
         return dec
 
@@ -477,6 +504,22 @@ class Edk2PrEval(Edk2MultiPkgAwareInvocable):
                             returnlist.append(os.path.join(Root, File))
 
         return returnlist
+
+    def _get_package_ci_information(self, pkg_name: str) -> str:
+        pkg_path = Path(self.edk2_path_obj.GetAbsolutePathOnThisSystemFromEdk2RelativePath(pkg_name))
+        ci_file = pkg_path.joinpath(f'{pkg_name}.ci.yaml')
+        dsc = None
+        defines = None
+
+        if not ci_file.exists():
+            return (None, None)
+
+        with open(ci_file, 'r') as f:
+            data = yaml.safe_load(f)
+            dsc = data.get("PrEval", {"DscPath": None})["DscPath"]
+            dsc = str(pkg_path / dsc) if dsc else None
+            defines = data.get("Defines", {})
+            return (dsc, defines)
 
 
 def main():

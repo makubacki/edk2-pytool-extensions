@@ -8,16 +8,19 @@
 ##
 """An ExternalDependency subclass able to download from a url."""
 
-import os
 import logging
+import os
+import pathlib
 import shutil
 import tarfile
-import zipfile
 import tempfile
 import urllib.error
 import urllib.request
-from edk2toolext.environment.external_dependency import ExternalDependency
+import zipfile
+
 from edk2toollib.utility_functions import RemoveTree
+
+from edk2toolext.environment.external_dependency import ExternalDependency
 
 
 class WebDependency(ExternalDependency):
@@ -37,7 +40,8 @@ class WebDependency(ExternalDependency):
                                 compressed, do not include this field. Optional
         sha256 (str): Hash of downloaded file to be checked against. Optional
 
-    TIP: The attributes are what must be described in the ext_dep yaml file!
+    !!! tip
+        The attributes are what must be described in the ext_dep yaml file!
     """
 
     TypeString = "web"
@@ -102,6 +106,13 @@ class WebDependency(ExternalDependency):
 
         for file in files_to_extract:
             _ref.extract(member=file, path=destination)
+
+            # unzip functionality does not preserve file permissions. Fix-up the permissions
+            path = pathlib.Path(destination, file)
+            if path.is_file() and compression_type == "zip":
+                expected_mode = _ref.getinfo(file).external_attr >> 16
+                path.chmod(expected_mode)
+
         _ref.close()
 
     def fetch(self):

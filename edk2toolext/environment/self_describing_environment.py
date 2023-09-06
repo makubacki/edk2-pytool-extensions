@@ -11,15 +11,14 @@
 Scans the environment for files that describe the source and dependencies
 and then acts upon those files.
 """
-import os
 import logging
-import pathlib
-from edk2toolext.environment import shell_environment
-from edk2toolext.environment import environment_descriptor_files as EDF
-from edk2toolext.environment import external_dependency
-from multiprocessing import dummy
+import os
 import time
+from multiprocessing import dummy
+from pathlib import Path
 
+from edk2toolext.environment import environment_descriptor_files as EDF
+from edk2toolext.environment import external_dependency, repo_resolver, shell_environment
 
 ENVIRONMENT_BOOTSTRAP_COMPLETE = False
 ENV_STATE = None
@@ -44,7 +43,16 @@ class self_describing_environment(object):
         self.scopes = scopes
 
         # Allow certain directories to be skipped
-        self.skipped_dirs = tuple(map(pathlib.Path, (os.path.join(self.workspace, d) for d in skipped_dirs)))
+        self.skipped_dirs = tuple(map(Path, (os.path.join(self.workspace, d) for d in skipped_dirs)))
+
+        # Respect git worktrees
+        details = repo_resolver.repo_details(self.workspace)
+        if details["Valid"]:
+            for worktree_path in details["Worktrees"]:
+                if (worktree_path.is_dir()
+                        and Path(self.workspace) != worktree_path
+                        and worktree_path not in skipped_dirs):
+                    self.skipped_dirs += (worktree_path,)
 
         # Validate that all scopes are unique.
         if len(self.scopes) != len(set(self.scopes)):
@@ -67,8 +75,8 @@ class self_describing_environment(object):
             dirs[:] = [d
                        for d
                        in dirs
-                       if pathlib.Path(root, d) not in self.skipped_dirs
-                       and pathlib.Path(root, d).name != '.git']
+                       if Path(root, d) not in self.skipped_dirs
+                       and Path(root, d).name != '.git']
 
             # Check for any files that match the extensions we're looking for.
             for file in files:
@@ -337,8 +345,8 @@ def BootstrapEnvironment(workspace, scopes=(), skipped_dirs=()):
         scopes (Tuple): scopes being built against
         skipped_dirs (Tuple): directories to ignore
 
-    WARNING: if only one scope or skipped_dir, the tuple should end with a comma
-    example: '(myscope,)'
+    !!! warning
+        if only one scope or skipped_dir, the tuple should end with a comma example: '(myscope,)'
     """
     global ENVIRONMENT_BOOTSTRAP_COMPLETE, ENV_STATE
 
@@ -391,8 +399,8 @@ def CleanEnvironment(workspace, scopes=(), skipped_dirs=()):
         scopes (Tuple): scopes being built against
         skipped_dirs (Tuple): directories to ignore
 
-    WARNING: if only one scope or skipped_dir, the tuple should end with a comma
-    example: '(myscope,)'
+    !!! warning
+        If only one scope or skipped_dir, the tuple should end with a comma example: '(myscope,)'
     """
     # Bootstrap the environment.
     (build_env, shell_env) = BootstrapEnvironment(workspace, scopes, skipped_dirs)
@@ -412,8 +420,8 @@ def UpdateDependencies(workspace, scopes=(), skipped_dirs=()):
         scopes (Tuple): scopes being built against
         skipped_dirs (Tuple): directories to ignore
 
-    WARNING: if only one scope or skipped_dir, the tuple should end with a comma
-    example: '(myscope,)'
+    !!! warning
+        If only one scope or skipped_dir, the tuple should end with a comma example: '(myscope,)'
     """
     # Bootstrap the environment.
     (build_env, shell_env) = BootstrapEnvironment(workspace, scopes, skipped_dirs)
@@ -433,8 +441,8 @@ def VerifyEnvironment(workspace, scopes=(), skipped_dirs=()):
         scopes (Tuple): scopes being built against
         skipped_dirs (Tuple): directories to ignore
 
-    WARNING: if only one scope or skipped_dir, the tuple should end with a comma
-    example: '(myscope,)'
+    !!! warning
+        If only one scope or skipped_dir, the tuple should end with a comma example: '(myscope,)'
     """
     # Bootstrap the environment.
     (build_env, shell_env) = BootstrapEnvironment(workspace, scopes, skipped_dirs)

@@ -7,10 +7,12 @@
 ##
 """This module contains code that supports Build Plugins."""
 
-import sys
-import os
 import importlib
 import logging
+import os
+import sys
+import warnings
+
 from edk2toolext.environment import shell_environment
 
 
@@ -78,7 +80,7 @@ class PluginManager(object):
     def _load(self, PluginDescriptor):
         """Load and instantiate the plugin.
 
-        Arguments:
+        Args:
             PluginDescriptor(PluginDescriptor): the plugin descriptor
         """
         PluginDescriptor.Obj = None
@@ -99,6 +101,9 @@ class PluginManager(object):
             py_module_dir = os.path.dirname(py_module_path)
             if py_module_dir not in sys.path:
                 sys.path.append(py_module_dir)
+
+            # Turn on Deprecation warnings for code in the plugin
+            warnings.filterwarnings("default", category=DeprecationWarning, module=module.__name__)
 
             spec.loader.exec_module(module)
         except Exception:

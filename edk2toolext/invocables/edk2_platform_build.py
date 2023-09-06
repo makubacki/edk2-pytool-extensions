@@ -13,17 +13,19 @@ file, along with a UefiBuilder subclass. This provides platform specific
 information to the Edk2PlatformBuild invocable while allowing the invocable
 itself to remain platform agnostic.
 """
+import logging
 import os
 import sys
-import logging
-from edk2toolext import edk2_logging
-from edk2toolext.environment import plugin_manager
-from edk2toolext.environment.plugintypes.uefi_helper_plugin import HelperFunctions
-from edk2toolext.environment import self_describing_environment
-from edk2toolext.environment.uefi_build import UefiBuilder
-from edk2toolext.edk2_invocable import Edk2Invocable, Edk2InvocableSettingsInterface
-from edk2toollib.utility_functions import locate_class_in_module
+from textwrap import wrap
+
 from edk2toollib.uefi.edk2.path_utilities import Edk2Path
+from edk2toollib.utility_functions import locate_class_in_module
+
+from edk2toolext import edk2_logging
+from edk2toolext.edk2_invocable import Edk2Invocable, Edk2InvocableSettingsInterface
+from edk2toolext.environment import plugin_manager, self_describing_environment
+from edk2toolext.environment.plugintypes.uefi_helper_plugin import HelperFunctions
+from edk2toolext.environment.uefi_build import UefiBuilder
 
 
 class BuildSettingsManager(Edk2InvocableSettingsInterface):
@@ -32,7 +34,7 @@ class BuildSettingsManager(Edk2InvocableSettingsInterface):
     Provides information necessary for `stuart_build.exe`
     or `edk2_platform_build.py` to successfully execute.
 
-    Example: Example: Overriding BuildSettingsManager
+    !!! example "Example of Overriding BuildSettingsManager"
         ```python
         from edk2toolext.invocables.edk2_platform_build import BuildSettingsManager
         class PlatformManager(BuildSettingsManager):
@@ -44,7 +46,8 @@ class BuildSettingsManager(Edk2InvocableSettingsInterface):
     def GetName(self) -> str:
         """Get the name of the repo, platform, or product being build.
 
-        TIP: Optional Override in subclass
+        !!! tip
+            Optional Override in subclass
 
         Returns:
             (str): Name of the repo, platform, or product
@@ -73,10 +76,39 @@ class Edk2PlatformBuild(Edk2Invocable):
         """Retrieve command line options from the argparser."""
         self.PlatformBuilder.RetrievePlatformCommandLineOptions(args)
 
+    def AddParserEpilog(self) -> str:
+        """Adds an epilog to the end of the argument parser when displaying help information.
+
+        Returns:
+            (str): The string to be added to the end of the argument parser.
+        """
+        epilog = super().AddParserEpilog()
+        custom_epilog = ""
+
+        variables = self.PlatformBuilder.SetPlatformDefaultEnv()
+        if any(variables):
+            max_name_len = max(len(var.name) for var in variables)
+            max_desc_len = min(max(len(var.description) for var in variables), 55)
+
+            custom_epilog += "CLI Env Variables:"
+            for v in variables:
+                # Setup wrap and print first portion of description
+                desc = wrap(v.description, max_desc_len,
+                            drop_whitespace=True, break_on_hyphens=True, break_long_words=True)
+                custom_epilog += f"\n  {v.name:<{max_name_len}} - {desc[0]:<{max_desc_len}}  [{v.default}]"
+
+                # If the line actually wrapped, we can print the rest of the lines here
+                for d in desc[1:]:
+                    custom_epilog += f"\n  {'':<{max_name_len}}   {d:{max_desc_len}}"
+            custom_epilog += '\n\n'
+
+        return custom_epilog + epilog
+
     def GetSettingsClass(self):
         """Returns the BuildSettingsManager class.
 
-        WARNING: CiSetupSettingsManager must be subclassed in your platform settings file.
+        !!! warning
+            CiSetupSettingsManager must be subclassed in your platform settings file.
         """
         return BuildSettingsManager
 

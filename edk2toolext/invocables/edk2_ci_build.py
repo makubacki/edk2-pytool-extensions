@@ -13,20 +13,23 @@ Contains a CIBuildSettingsManager that must be subclassed in a build settings
 file. This provides platform specific information to Edk2CiBuild invocable
 while allowing the invocable itself to remain platform agnostic.
 """
+import logging
 import os
 import sys
-import logging
-import yaml
 import traceback
-from typing import Dict, Any
-from edk2toollib.uefi.edk2.path_utilities import Edk2Path
+from typing import Any, Dict
+
+import yaml
 from edk2toollib.log.junit_report_format import JunitTestReport
-from edk2toolext.invocables.edk2_multipkg_aware_invocable import Edk2MultiPkgAwareInvocable
-from edk2toolext.invocables.edk2_multipkg_aware_invocable import MultiPkgAwareSettingsInterface
-from edk2toolext.environment import self_describing_environment
-from edk2toolext.environment.plugintypes.ci_build_plugin import ICiBuildPlugin
-from edk2toolext.environment import shell_environment
+from edk2toollib.uefi.edk2.path_utilities import Edk2Path
+
 from edk2toolext import edk2_logging
+from edk2toolext.environment import self_describing_environment, shell_environment
+from edk2toolext.environment.plugintypes.ci_build_plugin import ICiBuildPlugin
+from edk2toolext.invocables.edk2_multipkg_aware_invocable import (
+    Edk2MultiPkgAwareInvocable,
+    MultiPkgAwareSettingsInterface,
+)
 
 
 class CiBuildSettingsManager(MultiPkgAwareSettingsInterface):
@@ -35,7 +38,7 @@ class CiBuildSettingsManager(MultiPkgAwareSettingsInterface):
     Provide information necessary for `stuart_ci_build.exe` or
     `edk2_ci_build.py` to successfully execute.
 
-    Example: Example: Overriding CiBuildSettingsManager
+    !!! example "Example of Overriding CiBuildSettingsManager"
         ```python
         from edk2toolext.invocables.edk2_ci_build import CiBuildSettingsManager
         import yaml
@@ -51,7 +54,8 @@ class CiBuildSettingsManager(MultiPkgAwareSettingsInterface):
     def GetName(self) -> str:
         """Get the name of the repo, platform, or product being build by CI.
 
-        TIP: Required Override in a subclass
+        !!! tip
+            Required Override in a subclass
 
         Returns:
             (str): repo, platform, product
@@ -61,12 +65,13 @@ class CiBuildSettingsManager(MultiPkgAwareSettingsInterface):
     def GetPluginSettings(self) -> Dict[str, Any]:
         """Provide a dictionary of global settings for individual plugins.
 
-        TIP: Optional Override in a subclass
+        !!! tip
+            Optional Override in a subclass
 
-        WARNING:
+        !!! warning
             This sets the global plugin configurations. Edk2CiBuild automatically searches for,
             and loads, the package ci settings file if it exists. This file will override these
-            settings. This file must be located at the base of the package named <Package>.ci.yaml.
+            settings. This file must be located at the base of the package named [Package].ci.yaml.
 
             Ex: EmbeddedPkg/EmbeddedPkg.ci.yaml.
 
@@ -82,7 +87,8 @@ class Edk2CiBuild(Edk2MultiPkgAwareInvocable):
     def GetSettingsClass(self):
         """Returns the CiBuildSettingsManager class.
 
-        WARNING: CiBuildSettingsManager must be subclassed in your platform settings file.
+        !!! warning
+            CiBuildSettingsManager must be subclassed in your platform settings file.
         """
         return CiBuildSettingsManager
 
@@ -152,9 +158,7 @@ class Edk2CiBuild(Edk2MultiPkgAwareInvocable):
             packagebuildlog_path = os.path.join(log_directory, pkgToRunOn)
             _, txt_handle = edk2_logging.setup_txt_logger(
                 packagebuildlog_path, f"BUILDLOG_{pkgToRunOn}", logging_level=logging.DEBUG, isVerbose=True)
-            _, md_handle = edk2_logging.setup_markdown_logger(
-                packagebuildlog_path, f"BUILDLOG_{pkgToRunOn}", logging_level=logging.DEBUG, isVerbose=True)
-            loghandle = [txt_handle, md_handle]
+            loghandle = [txt_handle]
             shell_environment.CheckpointBuildVars()
             env = shell_environment.GetBuildVars()
 

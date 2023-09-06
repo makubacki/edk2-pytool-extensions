@@ -12,3 +12,5 @@ build.
 /test.junit.xml
 flake8.err.log
 /.eggs
+site
+/.ruff_cache

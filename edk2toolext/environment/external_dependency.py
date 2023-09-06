@@ -14,13 +14,15 @@ These manipulations include retrieving, validating, and cleaning external
 dependencies for the build environment.
 """
 
-import os
-import logging
-import yaml
 import hashlib
+import logging
+import os
 import shutil
-from edk2toolext.environment import version_aggregator
+
+import yaml
 from edk2toollib.utility_functions import GetHostInfo, RemoveTree
+
+from edk2toolext.environment import version_aggregator
 
 
 class ExternalDependency(object):
@@ -39,7 +41,8 @@ class ExternalDependency(object):
                            More info: (docs/feature_extdep/)
         var_name (str): Used with set_*_var flag. Determines name of var to be set.
 
-    TIP: The attributes are what must be described in the ext_dep yaml file!
+    !!! tip
+        The attributes are what must be described in the ext_dep yaml file!
     """
 
     def __init__(self, descriptor):
@@ -64,7 +67,7 @@ class ExternalDependency(object):
         self.contents_dir = os.path.join(
             self.descriptor_location, self.name + "_extdep")
         self.state_file_path = os.path.join(
-            self.contents_dir, "extdep_state.json")
+            self.contents_dir, "extdep_state.yaml")
         self.published_path = self.compute_published_path()
 
     def set_global_cache_path(self, global_cache_path):
@@ -110,7 +113,11 @@ class ExternalDependency(object):
                 logging.debug("{0} does not exist".format(dirname))
 
             if new_published_path is None:
-                logging.error("Could not find appropriate folder for {0}. {1}".format(self.name, str(host)))
+                logging.error(f"{self.name} is host specific, but does not appear to have support for {str(host)}.")
+                logging.error(f"Verify support for detected host: {str(host)} and contact dependency provider to add "\
+                              "support.")
+                logging.error("Otherwise, delete the external dependency directory to reset.")
+
                 new_published_path = self.contents_dir
 
         if self.flags and "include_separator" in self.flags:
@@ -215,13 +222,13 @@ class ExternalDependency(object):
 def ExtDepFactory(descriptor):
     """External Dependency Factory capable of generating each type of dependency.
 
-    Note: Ensure all external dependencies are imported in this class to
-    avoid errors.
+    !!! Note
+        Ensure all external dependencies are imported in this class to avoid errors.
     """
-    from edk2toolext.environment.extdeptypes.web_dependency import WebDependency
-    from edk2toolext.environment.extdeptypes.nuget_dependency import NugetDependency
-    from edk2toolext.environment.extdeptypes.git_dependency import GitDependency
     from edk2toolext.environment.extdeptypes.az_cli_universal_dependency import AzureCliUniversalDependency
+    from edk2toolext.environment.extdeptypes.git_dependency import GitDependency
+    from edk2toolext.environment.extdeptypes.nuget_dependency import NugetDependency
+    from edk2toolext.environment.extdeptypes.web_dependency import WebDependency
     if descriptor['type'] == NugetDependency.TypeString:
         return NugetDependency(descriptor)
     elif descriptor['type'] == WebDependency.TypeString:

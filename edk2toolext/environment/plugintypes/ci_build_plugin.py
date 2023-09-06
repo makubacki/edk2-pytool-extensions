@@ -7,8 +7,8 @@
 ##
 """Plugin that supports adding tests or operations to the ci environment."""
 
-import os
 import logging
+import os
 from typing import List, Tuple
 
 
@@ -34,7 +34,6 @@ class ICiBuildPlugin(object):
             (int): 0 - passed successfully
             (int): -1 - skipped for missing prereq
         """
-        pass
 
     def GetTestName(self, packagename: str, environment: object) -> Tuple[str, str]:
         """Provides the test case and class name.
@@ -50,18 +49,15 @@ class ICiBuildPlugin(object):
         Returns:
             (Tuple[str, str]): (test case name, test case base class name)
         """
-        pass
 
     def RunsOnTargetList(self) -> List[str]:
         """Returns a list of edk2 TARGETs that this plugin would like to run on.
 
-        HINT: known target values:
-        DEBUG
-        RELEASE
-        NOOPT
-        NO-TARGET
+        !!! note "Known target values"
+            DEBUG, RELEASE, NOOPT, NO-TARGET
 
-        HINT: If the plugin is not Target specific it should return a list of one element of "NO-TARGET"
+        !!! hint
+            If the plugin is not Target specific it should return a list of one element of "NO-TARGET"
         """
         return ["NO-TARGET"]
 
@@ -118,7 +114,6 @@ class ICiBuildPlugin(object):
                                     ignoreIt = True
                                     break
                         if not ignoreIt:
-                            logging.debug(os.path.join(Root, File))
                             returnlist.append(os.path.join(Root, File))
 
         return returnlist

@@ -16,20 +16,22 @@ perform tasks associated with the EDK2 build system. Any Edk2Invocable subclass
 should be platform agnostic and work for any platform. Platform specific data
 is provided via the Edk2InvocableSettingsInterface.
 """
+import argparse
+import inspect
+import logging
 import os
 import sys
-import logging
-import inspect
-import pkg_resources
-import argparse
-from typing import Iterable, Tuple
+import warnings
+from random import choice
+from string import ascii_letters
 from textwrap import dedent
-from edk2toolext.environment import shell_environment
-from edk2toollib.utility_functions import GetHostInfo
-from edk2toolext.environment import version_aggregator
-from edk2toollib.utility_functions import locate_class_in_module
-from edk2toollib.utility_functions import import_module_by_file_name
+from typing import Iterable, Tuple
+
+import pkg_resources
+from edk2toollib.utility_functions import GetHostInfo, import_module_by_file_name, locate_class_in_module
+
 from edk2toolext.base_abstract_invocable import BaseAbstractInvocable
+from edk2toolext.environment import shell_environment, version_aggregator
 
 
 class Edk2InvocableSettingsInterface():
@@ -39,13 +41,14 @@ class Edk2InvocableSettingsInterface():
     required to be implemented and can be implemented in a settings
     manager.
 
-    Example: Overriding Edk2InvocableSettingsInterface
+    !!! example "Example of Overriding Edk2InvocableSettingsInterface"
         ``` python
         import os
         import logging
         import argparse
         from typing import Iterable, Tuple
         from edk2toolext.edk2_invocable import Edk2InvocableSettingsInterface
+
         class NewInvocableSettingsManager(Edk2InvocableSettingsInterface):
             def GetWorkspaceRoot(self) -> str:
                 return os.path.abspath(__file__)
@@ -66,15 +69,17 @@ class Edk2InvocableSettingsInterface():
                 return ("Downloads/Extra")
         ```
 
-    WARNING: This interface should not be subclassed directly unless you are creating a new invocable
-    Other invocables subclass from this interface, so you have the ability to
-    call the functions in this class as a part of those invocable settings managers.
+    !!! warning
+        This interface should not be subclassed directly unless you are creating a new invocable
+        Other invocables subclass from this interface, so you have the ability to
+        call the functions in this class as a part of those invocable settings managers.
     """
 
     def GetWorkspaceRoot(self) -> str:
         """Return the workspace root for initializing the SDE.
 
-        TIP: Required Override in a subclass
+        !!! tip
+            Required Override in a subclass
 
         The absolute path to the root of the workspace
 
@@ -86,7 +91,8 @@ class Edk2InvocableSettingsInterface():
     def GetPackagesPath(self) -> Iterable[os.PathLike]:
         """Provides an iterable of paths should should be mapped as edk2 PackagePaths.
 
-        TIP: Optional Override in a subclass
+        !!! tip
+            Optional Override in a subclass
 
         Returns:
             (Iterable[os.PathLike]): paths
@@ -96,7 +102,8 @@ class Edk2InvocableSettingsInterface():
     def GetActiveScopes(self) -> Tuple[str]:
         """Provides scopes that should be active for this process.
 
-        TIP: Optional Override in a subclass
+        !!! tip
+            Optional Override in a subclass
 
         Returns:
             (Tuple[str]): scopes
@@ -106,43 +113,46 @@ class Edk2InvocableSettingsInterface():
     def GetLoggingLevel(self, loggerType: str) -> str:
         """Get the logging level depending on logger type.
 
-        TIP: Optional Override in a subclass
+        !!! tip
+            Optional Override in a subclass
 
         Returns:
             (Logging.Level): The logging level
 
-        HINT: loggerType possible values
-        base == lowest logging level supported
-        con  == Screen logging
-        txt  == plain text file logging
-        md   == markdown file logging
+        !!! note "loggerType possible values"
+            "base": lowest logging level supported
+
+            "con": logs to screen
+
+            "txt": logs to plain text file
         """
         return None
 
     def AddCommandLineOptions(self, parserObj: object) -> None:
         """Add command line options to the argparser.
 
-        TIP: Optional override in a subclass
+        !!! tip
+            Optional override in a subclass
 
         Args:
             parserObj: Argparser object.
         """
-        pass
 
     def RetrieveCommandLineOptions(self, args: object) -> None:
         """Retrieve Command line options from the argparser.
 
-        TIP: Optional override in a subclass
+        !!! tip
+            Optional override in a subclass
 
         Args:
             args: argparser args namespace containing command line options
         """
-        pass
 
     def GetSkippedDirectories(self) -> Tuple[str]:
         """Returns a tuple containing workspace-relative directories to be skipped.
 
-        TIP: Optional override in a subclass
+        !!! tip
+            Optional override in a subclass
 
         Returns:
             (Tuple[str]): directories to be skipped.
@@ -157,14 +167,15 @@ class Edk2Invocable(BaseAbstractInvocable):
     scopes, and other name value pairs
 
     Attributes:
-        PlatformSettings(Edk2InvocableSettingsInterface): A settings class
-        PlatformModule(object): The platform module
-        Verbose(bool): CLI Argument to determine whether or not to have verbose
+        PlatformSettings (Edk2InvocableSettingsInterface): A settings class
+        PlatformModule (object): The platform module
+        Verbose (bool): CLI Argument to determine whether or not to have verbose
 
-    TIP: Checkout BaseAbstractInvocable Attributes
-    to find any additional attributes that might exist.
+    !!! tip
+        Checkout BaseAbstractInvocable Attributes to find any additional attributes that might exist.
 
-    WARNING: This Invocable should only be subclassed if creating a new invocable
+    !!! warning
+        This Invocable should only be subclassed if creating a new invocable
     """
 
     @classmethod
@@ -188,10 +199,11 @@ class Edk2Invocable(BaseAbstractInvocable):
     def GetWorkspaceRoot(self) -> os.PathLike:
         """Returns the absolute path to the workspace root.
 
-        HINT: Workspace Root is platform specific and thus provided by the PlatformSettings.
+        !!! note
+            Workspace Root is platform specific and thus provided by the PlatformSettings
 
         Returns:
-            (PathLike): absolute path
+            absolute path to workspace root
         """
         try:
             return self.PlatformSettings.GetWorkspaceRoot()
@@ -201,10 +213,11 @@ class Edk2Invocable(BaseAbstractInvocable):
     def GetPackagesPath(self) -> Iterable[os.PathLike]:
         """Returns an iterable of packages path.
 
-        HINT: PackagesPath is platform specific and thus provided by the PlatformSettings.
+        !!! note
+            PackagesPath is platform specific and thus provided by the PlatformSettings
 
         Returns:
-            Iterable[os.PathLike]: Packages path
+            Packages path
         """
         try:
             return [x for x in self.PlatformSettings.GetPackagesPath() if x not in self.GetSkippedDirectories()]
@@ -214,12 +227,13 @@ class Edk2Invocable(BaseAbstractInvocable):
     def GetActiveScopes(self) -> Tuple[str]:
         """Returns an iterable of Active scopes.
 
-        HINT: Scopes are platform specific and thus provided by the PlatformSettings.
+        !!! note
+            Scopes are platform specific and thus provided by the PlatformSettings
 
-        Adds an os specific scope in addition to scopes provided by SettingsManager
+        This function adds an os specific scope in addition to scopes provided by SettingsManager
 
         Returns:
-            Tuple[str]: scopes
+            active scopes
         """
         try:
             scopes = self.PlatformSettings.GetActiveScopes()
@@ -238,7 +252,8 @@ class Edk2Invocable(BaseAbstractInvocable):
     def GetLoggingLevel(self, loggerType):
         """Get the logging level for a given logger type.
 
-        HINT: Logging Level is platform specific and thus provided by the PlatformSettings.
+        !!! note
+            Logging Level is platform specific and thus provided by the PlatformSettings
 
         Returns:
             (logging.Level): logging level
@@ -257,28 +272,28 @@ class Edk2Invocable(BaseAbstractInvocable):
     def AddCommandLineOptions(self, parserObj):
         """Add command line options to the argparser.
 
-        HINT: Optional Override to add functionality
+        !!! note
+            Optional Override to add functionality
         """
-        pass
 
     def RetrieveCommandLineOptions(self, args):
         """Retrieve command line options from the argparser.
 
-        HINT: Optional Override to add functionality
+        !!! note
+            Optional Override to add functionality
         """
-        pass
 
     def GetSkippedDirectories(self):
         """Returns a Tuple containing workspace-relative directories that should be skipped.
 
-        HINT: Override in a subclass to add invocable specific directories to skip
+        !!! tip
+            Override in a subclass to add invocable specific directories to skip
 
-        HINT: Skipped Directories are platform specific and thus provided by the PlatformSettings.
-
-        WARNING: Absolute paths are not supported
+        !!! note
+            Skipped Directories are platform specific and thus provided by the PlatformSettings
 
         Returns:
-            Tuple[str]: skipped directories
+            (Tuple[str]): skipped directories as relative paths
         """
         try:
             return self.PlatformSettings.GetSkippedDirectories()
@@ -288,7 +303,8 @@ class Edk2Invocable(BaseAbstractInvocable):
     def GetSettingsClass(self):
         """The required settings manager for the invocable.
 
-        HINT: Required override to define Edk2InvocableSettingsInterface subclass specific to the invocable.
+        !!! note
+            Required override to define Edk2InvocableSettingsInterface subclass specific to the invocable
 
         Returns:
             (Edk2InvocableSettingsInterface): Subclass of Edk2InvocableSettingsInterface
@@ -299,6 +315,25 @@ class Edk2Invocable(BaseAbstractInvocable):
         """Directory containing all logging files."""
         return "Build"
 
+    def AddParserEpilog(self) -> str:
+        """Adds an epilog to the end of the argument parser when displaying help information.
+
+        Returns:
+            (str): The string to be added to the end of the argument parser.
+        """
+        epilog = dedent('''\
+            CLI Env Guide:
+              <key>=<value>              - Set an env variable for the pre/post build process
+              <key>                      - Set a non-valued env variable for the pre/post build process
+              BLD_*_<key>=<value>        - Set a build flag for all build types
+                                           (key=value will get passed to build process)
+              BLD_*_<key>                - Set a non-valued build flag for all build types
+              BLD_<TARGET>_<key>=<value> - Set a build flag for build type of <target>
+                                           (key=value will get passed to build process for given build type)
+              BLD_<TARGET>_<key>         - Set a non-valued build flag for a build type of <target>
+            ''')
+        return epilog
+
     def ParseCommandLineOptions(self):
         """Parses command line options.
 
@@ -308,18 +343,6 @@ class Edk2Invocable(BaseAbstractInvocable):
         """
         # first argparser will only get settings manager and help will be disabled
         settingsParserObj = argparse.ArgumentParser(add_help=False)
-        # instantiate the second argparser that will get passed around
-
-        epilog = dedent('''\
-            positional arguments:
-              <key>=<value>              - Set an env variable for the pre/post build process
-              BLD_*_<key>=<value>        - Set a build flag for all build types
-                                           (key=value will get passed to build process)
-              BLD_<TARGET>_<key>=<value> - Set a build flag for build type of <target>
-                                           (key=value will get passed to build process for given build type)
-            ''')
-
-        parserObj = argparse.ArgumentParser(epilog=epilog, formatter_class=argparse.RawDescriptionHelpFormatter,)
 
         settingsParserObj.add_argument('-c', '--platform_module', dest='platform_module',
                                        default="PlatformBuild.py", type=str,
@@ -369,7 +392,12 @@ class Edk2Invocable(BaseAbstractInvocable):
             print(e)
             sys.exit(2)
 
-        # now to get the big arg parser going...
+        # Turn on Deprecation warnings for code in the module
+        warnings.filterwarnings("default", category=DeprecationWarning, module=self.PlatformModule.__name__)
+
+        # instantiate the second argparser that will get passed around
+        parserObj = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,)
+
         # first pass it to the subclass
         self.AddCommandLineOptions(parserObj)
 
@@ -384,6 +412,9 @@ class Edk2Invocable(BaseAbstractInvocable):
         parserObj.add_argument('--verbose', '--VERBOSE', '-v', dest="verbose", action='store_true', default=False,
                                help='verbose')
 
+        # set the epilog to display with --help, -h
+        parserObj.epilog = self.AddParserEpilog()
+
         # setup sys.argv and argparse round 2
         sys.argv = [sys.argv[0]] + unknown_args
         args, unknown_args = parserObj.parse_known_args()
@@ -396,18 +427,29 @@ class Edk2Invocable(BaseAbstractInvocable):
         self.PlatformSettings.RetrieveCommandLineOptions(args)
 
         #
-        # Look through unknown_args and BuildConfig for strings that are x=y,
-        # set env.SetValue(x, y),
-        # then remove this item from the list.
+        # Look through unknown_args and BuildConfig for strings that are:
+        # 1. x=y, -> set env.SetValue(x, y),
+        # 2. x, -> set env.SetValue(x, random_string)
+        # then remove these items from the list.
         #
+        # Non valued build variables (#2) set the value to a random string
+        # as the expectation is that any developer using this functionality
+        # check for the existence of the build variable rather then the value
+        # of the variable. This is to have parity between edk2's build -D
+        # flag and stuart.
         env = shell_environment.GetBuildVars()
         BuildConfig = os.path.abspath(args.build_config)
 
         for argument in unknown_args:
-            if argument.count("=") != 1:
+            if argument.count("=") == 1:
+                tokens = argument.strip().split("=")
+                env.SetValue(tokens[0].strip().upper(), tokens[1].strip(), "From CmdLine")
+            elif argument.count("=") == 0:
+                env.SetValue(argument.strip().upper(),
+                             ''.join(choice(ascii_letters) for _ in range(20)),
+                             "Non valued variable set From cmdLine")
+            else:
                 raise RuntimeError(f"Unknown variable passed in via CLI: {argument}")
-            tokens = argument.strip().split("=")
-            env.SetValue(tokens[0].strip().upper(), tokens[1].strip(), "From CmdLine")
 
         unknown_args.clear()  # remove the arguments we've already consumed
 
@@ -420,7 +462,12 @@ class Edk2Invocable(BaseAbstractInvocable):
                     unknown_args.append(stripped_line)
 
         for argument in unknown_args:
-            if argument.count("=") != 1:
+            if argument.count("=") == 1:
+                tokens = argument.strip().split("=")
+                env.SetValue(tokens[0].strip().upper(), tokens[1].strip(), "From BuildConf")
+            elif argument.count("=") == 0:
+                env.SetValue(argument.strip().upper(),
+                             ''.join(choice(ascii_letters) for _ in range(20)),
+                             "Non valued variable set from BuildConfig")
+            else:
                 raise RuntimeError(f"Unknown variable passed in via BuildConfig: {argument}")
-            tokens = argument.strip().split("=")
-            env.SetValue(tokens[0].strip().upper(), tokens[1].strip(), "From BuildConf")

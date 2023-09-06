@@ -17,6 +17,7 @@ File is slightly modified from Edk2 BaseTools/Source/Python/Common/MultipleWorks
 """
 
 import os
+import warnings
 
 
 class MultipleWorkspace(object):
@@ -39,7 +40,7 @@ class MultipleWorkspace(object):
             Path (str): Path to be converted to match workspace
 
         Returns:
-            (str) Converted path.
+            (str): Converted path.
         """
         if str(os.path.normcase(Path)).startswith(Ws):
             return os.path.join(Ws, Path[len(Ws) + 1:])
@@ -73,6 +74,9 @@ class MultipleWorkspace(object):
         Returns:
             (str): absolute path of the specified file
         """
+        warnings.warn(
+            "MultipleWorkspace is deprecated. Use Edk2Path.GetAbsolutePathOnThisSystemFromEdk2RelativePath().",
+            DeprecationWarning, stacklevel=2)
         Path = os.path.join(Ws, *p)
         if not os.path.exists(Path):
             for Pkg in cls.PACKAGES_PATH:
@@ -94,6 +98,9 @@ class MultipleWorkspace(object):
         Returns:
             (str): the relative path of specified file
         """
+        warnings.warn(
+            "MultipleWorkspace is deprecated. use Edk2Path.GetEdk2RelativePathOnThisSystemFromAbsolutePath().",
+            DeprecationWarning, stacklevel=2)
         for Pkg in cls.PACKAGES_PATH:
             if Path.lower().startswith(Pkg.lower()):
                 Path = os.path.relpath(Path, Pkg)
@@ -108,7 +115,7 @@ class MultipleWorkspace(object):
 
         Args:
             cls (obj): The class pointer
-            ws (str): the current WORKSPACE
+            Ws (str): the current WORKSPACE
             Path (str): path of the inf/dec/dsc/fdf/conf file
 
         Returns:
@@ -126,15 +133,18 @@ class MultipleWorkspace(object):
     def handleWsMacro(cls, PathStr):
         """Handle the $(WORKSPACE) tag.
 
-        If current workspace is an invalid path relative to the tool, replace
-        it.
+        If current workspace is an invalid path relative to the tool, replace it.
 
         Args:
             cls (obj): The class pointer
+            PathStr (str): The path string
 
         Returns:
             (Str): Path string including the $(WORKSPACE)
         """
+        warnings.warn("MultipleWorkspace is deprecated. Manually replace the $(WORKSPACE). If you believe "
+                      "this functionality needs a direct replacement, file an issue in edk2-pytool-extensions.",
+                      DeprecationWarning, stacklevel=2)
         TAB_WORKSPACE = '$(WORKSPACE)'
         if TAB_WORKSPACE in PathStr:
             PathList = PathStr.split()

@@ -9,15 +9,16 @@
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 ##
 """An ExternalDependency subclass able to download from an Azure feed."""
-import os
-import logging
-import shutil
 import json
+import logging
+import os
+import shutil
 from io import StringIO
-from edk2toolext.environment import shell_environment
+
+from edk2toollib.utility_functions import RemoveTree, RunCmd
+
+from edk2toolext.environment import shell_environment, version_aggregator
 from edk2toolext.environment.external_dependency import ExternalDependency
-from edk2toollib.utility_functions import RunCmd, RemoveTree
-from edk2toolext.environment import version_aggregator
 
 
 class AzureCliUniversalDependency(ExternalDependency):
@@ -27,12 +28,13 @@ class AzureCliUniversalDependency(ExternalDependency):
         feed (str): feed name
         version (str): semantic version <Major.Minor.Patch>
         source (str): url of organization (example: https://dev.azure.com/tianocore)
-        project (str) <name of project for project scoped feed.  If missing assume organization scoped>
+        project (str): <name of project for project scoped feed.  If missing assume organization scoped>
         name (str): name of artifact
         file-filter (str): <optional> filter for folders and files.
         pat_var (str): shell_var name for PAT for this ext_dep
 
-    TIP: The attributes are what must be described in the ext_dep yaml file!
+    !!! tip
+        The attributes are what must be described in the ext_dep yaml file!
     """
     TypeString = "az-universal"
 

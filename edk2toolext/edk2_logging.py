@@ -1,28 +1,29 @@
 # @file edk2_logging.py
-# Handle basic logging config for builds;
+# Handle basic logging config for invocables;
 # splits logs into a master log and per package.
 ##
 # Copyright (c) Microsoft Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 ##
-"""Handles basic logging config for builds.
+"""Handles basic logging config for invocables.
+
+edk2_logging will automatically filter logs for PATs / Secrets when it is
+detected that the invocable is running on a CI system. It does this via
+searching for "CI" or "TF_BUILD" in the os's environment variables. If either
+of these exists and and are set to TRUE, filtering will occur.
 
 Splits logs into a master log and per package log.
 """
 import logging
 import os
-import shutil
 import re
+import shutil
 
 try:
     from edk2toollib.log import ansi_handler
 except ImportError:
     ansi_handler = None
-try:
-    from edk2toollib.log import markdown_handler
-except ImportError:
-    markdown_handler = None
 try:
     from edk2toollib.log import string_handler
 except ImportError:
@@ -109,9 +110,14 @@ def setup_txt_logger(directory, filename="log", logging_level=logging.INFO,
     if not os.path.isdir(directory):
         os.makedirs(directory)
 
-    # Create file logger
     logfile_path = os.path.join(directory, filename + ".txt")
-    filelogger = file_handler.FileHandler(filename=(logfile_path), mode='w+')
+
+    # delete file before starting a new log
+    if os.path.isfile(logfile_path):
+        os.remove(logfile_path)
+
+    # Create file logger
+    filelogger = file_handler.FileHandler(filename=(logfile_path), mode='a')
     filelogger.setLevel(logging_level)
     filelogger.setFormatter(log_formatter)
     logger.addHandler(filelogger)
@@ -121,42 +127,14 @@ def setup_txt_logger(directory, filename="log", logging_level=logging.INFO,
     return logfile_path, filelogger
 
 
-# creates the markdown logger
-def setup_markdown_logger(directory, filename="log", logging_level=logging.INFO,
-                          formatter=None, logging_namespace='', isVerbose=False):
-    """Configures a markdown logger."""
-    logger = logging.getLogger(logging_namespace)
-    log_formatter = formatter
-    if log_formatter is None:
-        log_formatter = logging.Formatter("%(levelname)s - %(message)s")
-
-    if not os.path.isdir(directory):
-        os.makedirs(directory)
-
-    # add markdown handler
-    markdown_filename = filename + ".md"
-    markdown_path = os.path.join(directory, markdown_filename)
-    if markdown_handler:
-        markdownHandler = markdown_handler.MarkdownFileHandler(markdown_path, mode="w+")
-    else:
-        markdownHandler = logging.FileHandler(markdown_path, mode="w+")
-    markdownHandler.setFormatter(log_formatter)
-
-    if logging_level <= logging.DEBUG:
-        logging_level = logging.INFO  # we don't show debugging output in markdown since it gets too full
-
-    markdownHandler.addFilter(get_edk2_filter(isVerbose))
-
-    markdownHandler.setLevel(logging_level)
-    logger.addHandler(markdownHandler)
-
-    return markdown_path, markdownHandler
-
-
 # sets up a colored console logger
 def setup_console_logging(logging_level=logging.INFO, formatter=None, logging_namespace='',
                           isVerbose=False, use_azure_colors=False, use_color=True):
-    """Configures a console logger."""
+    """Configures a console logger.
+
+    Filtering of secrets will automatically occur if "CI" or "TF_BUILD" is set to TRUE
+    in the os's environment.
+    """
     if formatter is None and isVerbose:
         formatter_msg = "%(name)s: %(levelname)s - %(message)s"
     elif formatter is None:
@@ -237,13 +215,18 @@ def scan_compiler_output(output_stream):
     # seek to the start of the output stream
     def output_compiler_error(match, line, start_txt="Compiler"):
         start, end = match.span()
-        source = line[:start]
-        error = line[end:]
+        source = line[:start].strip()
+        error = line[end:].strip()
         num = match.group(1)
         return f"{start_txt} #{num} from {source} {error}"
     problems = []
     output_stream.seek(0, 0)
     error_exp = re.compile(r"error [A-EG-Z]?(\d+):")
+    # Would prefer to do something like r"(?:\/[^\/: ]*)+\/?:\d+:\d+: (error):"
+    # but the script is currently setup on fixed formatting assumptions rather
+    # than offering per rule flexibility to parse tokens via regex
+    gcc_error_exp = re.compile(r":\d+:\d+: (error):", re.IGNORECASE)
+    gcc_fatal_error_exp = re.compile(r"fatal error:")
     edk2_error_exp = re.compile(r"error F(\d+):")
     build_py_error_exp = re.compile(r"error (\d+)E:")
     linker_error_exp = re.compile(r"error LNK(\d+):")
@@ -254,6 +237,13 @@ def scan_compiler_output(output_stream):
         if match is not None:
             error = output_compiler_error(match, line, "Compiler")
             problems.append((logging.ERROR, error))
+        match = gcc_error_exp.search(line)
+        if match is not None:
+            error = output_compiler_error(match, line, "Compiler")
+            problems.append((logging.ERROR, error))
+        match = gcc_fatal_error_exp.search(line)
+        if match is not None:
+            problems.append((logging.ERROR, line))
         match = warning_exp.search(line)
         if match is not None:
             error = output_compiler_error(match, line, "Compiler")
@@ -282,6 +272,19 @@ class Edk2LogFilter(logging.Filter):
         logging.Filter.__init__(self)
         self._verbose = False
         self._currentSection = "root"
+        self.apply_filter = False
+
+        # Turn on filtering for azure pipelines / github actions
+        if os.environ.get("CI", "FALSE").upper() == "TRUE" or os.environ.get("TF_BUILD", "FALSE").upper() == "TRUE":
+            self.apply_filter = True
+
+        secrets_regex_strings = [
+            r"[a-z0-9]{46}",  # Nuget API Key is generated as all lowercase
+            r"gh[pousr]_[A-Za-z0-9_]+",  # Github PAT
+            r"[a-z0-9]{52}",  # Azure PAT is generated as all lowercase
+        ]
+
+        self.secrets_regex = re.compile(r"{}".format("|".join(secrets_regex_strings)), re.IGNORECASE)
 
     def setVerbose(self, isVerbose=True):
         """Sets the filter verbosity."""
@@ -298,5 +301,6 @@ class Edk2LogFilter(logging.Filter):
         # check to make sure we haven't already filtered this record
         if record.name not in Edk2LogFilter._allowedLoggers and record.levelno < logging.WARNING and not self._verbose:
             return False
-
+        if self.apply_filter:
+            record.msg = self.secrets_regex.sub("*******", str(record.msg))
         return True

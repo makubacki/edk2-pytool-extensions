@@ -16,12 +16,12 @@ class IUefiHelperPlugin(object):
     def RegisterHelpers(self, obj):
         """Allows a plugin to register its functions.
 
-        TIP: obj.Register()
+        !!! tip
+            ```obj.Register()```
 
         Args:
             obj (HelperFunctions): HelperFunctions object that allows functional registration
         """
-        pass
 
 
 class HelperFunctions(object):
@@ -56,7 +56,8 @@ class HelperFunctions(object):
             function (func): function being registered
             filepath (str): filepath to this file
 
-        TIP: os.path.abspath(__file__)
+        !!! tip
+            ```os.path.abspath(__file__)```
         """
         if (name in self.RegisteredFunctions.keys()):
             raise Exception("Function %s already registered from plugin file %s.  Can't register again from %s" % (
@@ -99,6 +100,6 @@ class HelperFunctions(object):
             except Exception as e:
                 logging.warning(
                     "Unable to register {0}".format(Descriptor.Name))
-                logging.info(e)
+                logging.error(e)
                 error += 1
         return error
