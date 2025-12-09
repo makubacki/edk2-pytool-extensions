@@ -105,6 +105,61 @@ More information:
 - Azure DevOps Extension: <https://github.com/Azure/azure-devops-cli-extension>
 - Universal Packages Information: <https://docs.microsoft.com/en-us/azure/devops/artifacts/quickstarts/universal-packages?view=azure-devops>
 
+## Chocolatey Dependency
+
+**TypeString:** `chocolatey`
+
+The Chocolatey dependency allows external dependencies to be retrieved from
+Chocolatey package repositories. This is particularly useful on Windows systems
+where many development tools and utilities are available through Chocolatey.
+
+There are a few limitations to be aware of when using Chocolatey dependencies:
+
+- Chocolatey dependencies are only supported on Windows platforms
+- Chocolatey needs to be run with administrative privileges to install packages
+- Some command-line arguments like `--install-directory` are only available in
+  the commercial version of Chocolatey and cannot be used in stuart code.
+
+**Schema Overview:**
+
+- **package:** (Optional) The name of the package to install. If omitted, the
+  `name` field is used as the package name.
+- **source:** (Optional) The Chocolatey source/feed URL to use. Defaults to
+  the official Chocolatey Community Repository
+  (`https://community.chocolatey.org/api/v2/`).
+- **version:** (Required) The version of the package to install.
+
+**Example JSON Descriptor:**
+
+```json
+{
+  "scope": "global",
+  "type": "chocolatey",
+  "name": "nasm",
+  "version": "2.15.05",
+  "source": "https://community.chocolatey.org/api/v2/",
+  "flags": ["set_path"]
+}
+```
+
+**Platform Notes:**
+
+- Chocolatey must be installed on the system before fetching dependencies
+- The tool will check for `choco.exe` in the following locations (in order):
+
+  1. Custom path specified via command-line argument (future enhancement)
+  2. `CHOCO_PATH` environment variable
+  3. System PATH
+
+- The Chocolatey local cache (`C:\ProgramData\chocolatey\lib`) is checked
+  before attempting installation
+
+More information:
+
+- Chocolatey: <https://chocolatey.org/>
+- Chocolatey Package Repository: <https://community.chocolatey.org/packages>
+- Installing Chocolatey: <https://chocolatey.org/install>
+
 ### Developer Note
 
 To create a new Dependency type it requires a new subclass of the

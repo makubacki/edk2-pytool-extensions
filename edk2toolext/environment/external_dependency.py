@@ -222,6 +222,7 @@ def ExtDepFactory(descriptor: dict) -> "ExternalDependency":
         Ensure all external dependencies are imported in this class to avoid errors.
     """
     from edk2toolext.environment.extdeptypes.az_cli_universal_dependency import AzureCliUniversalDependency
+    from edk2toolext.environment.extdeptypes.chocolatey_dependency import ChocolateyDependency
     from edk2toolext.environment.extdeptypes.git_dependency import GitDependency
     from edk2toolext.environment.extdeptypes.nuget_dependency import NugetDependency
     from edk2toolext.environment.extdeptypes.web_dependency import WebDependency
@@ -235,5 +236,7 @@ def ExtDepFactory(descriptor: dict) -> "ExternalDependency":
     elif descriptor["type"] == AzureCliUniversalDependency.TypeString:
         AzureCliUniversalDependency.VerifyToolDependencies()
         return AzureCliUniversalDependency(descriptor)
+    elif descriptor["type"] == ChocolateyDependency.TypeString:
+        return ChocolateyDependency(descriptor)
 
     raise ValueError("Unknown extdep type '%s' requested!" % descriptor["type"])
